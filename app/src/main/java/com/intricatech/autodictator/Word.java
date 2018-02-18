@@ -9,9 +9,9 @@ public class Word {
     private String wordString;
     private WordType type;
 
-    public Word(String wordString, boolean isKeyword) {
+    public Word(String wordString, WordType wordType) {
         this.wordString = wordString;
-        this.type = isKeyword ? WordType.KEYWORD : WordType.NORMAL;
+        this.type = wordType;
     }
 
     public String getWordString() {
@@ -26,7 +26,7 @@ public class Word {
         return type;
     }
 
-    public void setKeyword(boolean keyword) {
+    public void declareKeyword(boolean keyword) {
         type = WordType.KEYWORD;
     }
 }

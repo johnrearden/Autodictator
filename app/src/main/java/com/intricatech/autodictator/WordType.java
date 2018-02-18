@@ -6,6 +6,8 @@ package com.intricatech.autodictator;
 
 public enum WordType {
     NORMAL,
-    PUNCTUATION,
-    KEYWORD
+    PUNC_END_SENTENCE,
+    PUNC_WITHIN_SENTENCE,
+    KEYWORD,
+    IGNORED
 }

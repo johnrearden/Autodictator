@@ -18,16 +18,18 @@ public class ReadInterpreter extends AbstractInterpreter {
 
     private static SpeakerFacade textSpeaker;
 
-    public void configure(SpeakerFacade speaker) {
+    public static void configure(SpeakerFacade speaker) {
         textSpeaker = speaker;
     }
 
     private ReadInterpreter() {}
 
     @Override
-    public boolean interpret(ResultsUnderEvaluation resultsUnderEvaluation,
+    public boolean interpret(Document document,
+                             ResultsUnderEvaluation resultsUnderEvaluation,
                              String resultsFromRecognizer,
-                             MainActivity.MasterState masterState) {
+                             MainActivity.MasterState masterState,
+                             boolean isSpeaking) {
 
         String[] splitterArray = resultsFromRecognizer.split(" ");
         String lastWord = splitterArray[splitterArray.length - 1];
@@ -36,7 +38,7 @@ public class ReadInterpreter extends AbstractInterpreter {
         if (lastWord.toUpperCase().equals("EVERYTHING")) {
             Log.d(TAG, "'EVERYTHING' heard .... reading");
             Log.d(TAG, resultsFromRecognizer);
-            textSpeaker.addSpeechToQueue("This is just a test utterance, bay");
+            textSpeaker.addSpeechToQueue(document.returnEntireDocumentAsString());
         }
 
         return false;

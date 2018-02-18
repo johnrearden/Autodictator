@@ -13,7 +13,9 @@ public interface InterpreterState {
      * @return TRUE if the resultsUnderEvaluation has been changed, FALSE otherwise.
      */
     public boolean interpret(
+            Document document,
             ResultsUnderEvaluation resultsUnderEvaluation,
             String resultsFromRecognizer,
-            MainActivity.MasterState masterState);
+            MainActivity.MasterState masterState,
+            boolean isSpeaking);
 }

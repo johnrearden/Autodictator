@@ -9,4 +9,6 @@ public interface SpeakerFacade {
     public void speakImmediately(String utterance);
 
     public void addSpeechToQueue(String utterance);
+
+    public boolean isSpeaking();
 }

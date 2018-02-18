@@ -1,6 +1,6 @@
 package com.intricatech.autodictator;
 
-import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -11,15 +11,17 @@ public class Paragraph {
 
     private List<Sentence> sentenceList;
 
-    public Paragraph(Sentence... sentences) {
-        sentenceList = Arrays.asList(sentences);
+    public Paragraph() {
+        sentenceList = new LinkedList<>();
     }
 
-    public Paragraph() {
-        this(null);
-    }
+
 
     public List<Sentence> getSentenceList() {
         return sentenceList;
+    }
+
+    public void addSentence(Sentence sentence) {
+        sentenceList.add(sentence);
     }
 }

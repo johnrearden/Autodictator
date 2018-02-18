@@ -11,7 +11,6 @@ public class ResultsUnderEvaluation {
 
     private String cumulativeCurrentResults;
     private List<Word> currentResultsWordList;
-    private String lastWord;
 
     public ResultsUnderEvaluation() {
         currentResultsWordList = new LinkedList<>();
@@ -48,8 +47,8 @@ public class ResultsUnderEvaluation {
 
     public void disregardLastTwoWords() {
         int size = currentResultsWordList.size();
-        currentResultsWordList.get(size - 2).setKeyword(true);
-        currentResultsWordList.get(size - 1).setKeyword(true);
+        currentResultsWordList.get(size - 2).declareKeyword(true);
+        currentResultsWordList.get(size - 1).declareKeyword(true);
 
     }
 }

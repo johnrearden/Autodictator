@@ -1,6 +1,6 @@
 package com.intricatech.autodictator;
 
-import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -10,16 +10,38 @@ import java.util.List;
 public class Sentence {
 
     private List<Word> wordList;
-
-    public Sentence(Word... words) {
-        wordList = Arrays.asList(words);
-    }
+    private int storageID;
+    private int indexOfAppearance;
 
     public Sentence() {
-        this(null);
+        wordList = new LinkedList<>();
+        storageID = -1;
+        indexOfAppearance = -1;
     }
+
+
 
     public List<Word> getWordList() {
         return wordList;
+    }
+
+    public void addWord(Word word) {
+        wordList.add(word);
+    }
+
+    public int getStorageID() {
+        return storageID;
+    }
+
+    public void setStorageID(int storageID) {
+        this.storageID = storageID;
+    }
+
+    public int getIndexOfAppearance() {
+        return indexOfAppearance;
+    }
+
+    public void setIndexOfAppearance(int indexOfAppearance) {
+        this.indexOfAppearance = indexOfAppearance;
     }
 }

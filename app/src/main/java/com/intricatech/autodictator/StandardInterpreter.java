@@ -18,9 +18,11 @@ public class StandardInterpreter extends AbstractInterpreter {
 
     @Override
     public boolean interpret(
+            Document document,
             ResultsUnderEvaluation resultsUnderEvaluation,
             String resultsFromRecognizer,
-            MainActivity.MasterState masterState) {
+            MainActivity.MasterState masterState,
+            boolean isSpeaking) {
 
         String cumulativeResults = resultsUnderEvaluation.getCumulativeCurrentResults();
 
@@ -28,7 +30,11 @@ public class StandardInterpreter extends AbstractInterpreter {
         // the length of ResultsUnderEvaluation.cumulativeCurrentResults, the recognizer has provided
         // new results, and we must update our cumulative results.
         if ( !resultsFromRecognizer.equals(cumulativeResults)) {
-            updateResultsUnderEvaluation(resultsUnderEvaluation, resultsFromRecognizer, masterState);
+            updateResultsUnderEvaluation(
+                    resultsUnderEvaluation,
+                    resultsFromRecognizer,
+                    masterState,
+                    isSpeaking);
             return true;
         } else return false;
     }
@@ -36,14 +42,22 @@ public class StandardInterpreter extends AbstractInterpreter {
     private void updateResultsUnderEvaluation(
             ResultsUnderEvaluation resultsUnderEvaluation,
             String resultsFromRecognizer,
-            MainActivity.MasterState masterState) {
+            MainActivity.MasterState masterState,
+            boolean isSpeaking) {
         List<Word> wordList = resultsUnderEvaluation.getCurrentResultsWordList();
         resultsUnderEvaluation.overwriteCurrentResults(resultsFromRecognizer);
         String[] splitterArray = resultsFromRecognizer.split(" ");
         wordList.clear();
+        WordType wordType;
         for (String s : splitterArray) {
-            boolean isKeyword = masterState == MainActivity.MasterState.EDITING ? true : false;
-            wordList.add(new Word(s, isKeyword));
+            if (isSpeaking) {
+                wordType = WordType.IGNORED;
+            } else {
+                wordType = masterState == MainActivity.MasterState.EDITING ?
+                        WordType.KEYWORD : WordType.NORMAL;
+            }
+            wordList.add(new Word(s, wordType));
+
         }
 
         // todo - Further split words by punctuation marks returned by the recognizer.

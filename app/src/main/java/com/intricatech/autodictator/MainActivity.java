@@ -1,8 +1,7 @@
 package com.intricatech.autodictator;
 
-import android.content.Context;
 import android.content.Intent;
-import android.media.AudioManager;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
@@ -17,18 +16,33 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity implements RecognitionListener {
+
+    public static final String[] ERROR_CODES = new String[] {
+            "ERROR_NETWORK_TIMEOUT (1)",
+            "ERROR_NETWORK (2)",
+            "ERROR_AUDIO (3)",
+            "ERROR_SERVER (4)",
+            "ERROR_CLIENT (5)",
+            "ERROR_SPEECH_TIMEOUT (6)",
+            "ERROR_NO_MATCH (7)",
+            "ERROR_RECOGNIZER_BUSY (8)",
+            "ERROR_INSUFFICIENT_PERMISSIONS (9)",
+    };
 
     private final int REQUEST_SPEECH_RECOGNIZER = 1000;
     private final String SPEAK_PROMPT = "Speak now, earthling!";
     private String TAG;
 
     private TextView dictationOutputTV;
+    // todo add support for touch editing with a textwatcher on the textview.
     private TextView interpreterSelectorTV;
     private TextView masterStateIndicatorTV;
+    private TextView isSpeakingIndicatorTV;
     private Button startDictationButton;
     private StringBuilder cumulativeResults;
 
@@ -36,9 +50,11 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
     private boolean recognizerReady = true;
 
     private SpeakerFacade speaker;
+    private StorageInterface storage;
     private AbstractInterpreter currentInterpreter;
     private InterpreterSelector interpreterSelector;
     private ResultsUnderEvaluation resultsUnderEvaluation;
+    private Document document;
 
     private long startListeningTime;
     private long startDeadTime;
@@ -68,15 +84,18 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
         });
 
         // Create objects.
+        StorageFacade.initialize(getApplicationContext());
+        storage = StorageFacade.getInstance();
         currentInterpreter = StandardInterpreter.getInstance();
         interpreterSelector = InterpreterSelector.STANDARD_INTERPRETER;
         resultsUnderEvaluation = new ResultsUnderEvaluation();
-
+        document = storage.retrieveEntireDocument(0);
 
         // Initialize GUI elements.
-        dictationOutputTV = (TextView) findViewById(R.id.dictation_output);
-        interpreterSelectorTV = (TextView) findViewById(R.id.interpreter_selector);
-        masterStateIndicatorTV = (TextView) findViewById(R.id.master_state_indicator);
+        dictationOutputTV = findViewById(R.id.dictation_output);
+        interpreterSelectorTV = findViewById(R.id.interpreter_selector);
+        masterStateIndicatorTV = findViewById(R.id.master_state_indicator);
+        isSpeakingIndicatorTV = findViewById(R.id.isspeaking_indicator);
         updateInterpreterSelectorTV();
 
         startDictationButton = (Button) findViewById(R.id.start_dictation_button);
@@ -86,16 +105,18 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
                 listenForVoiceInBackground();
             }
         });
-        speaker = new TextSpeaker(getApplicationContext());
 
+        speaker = new TextSpeaker(getApplicationContext());
+        ReadInterpreter.configure(speaker);
         recognizer = SpeechRecognizer.createSpeechRecognizer(this);
         recognizer.setRecognitionListener(this);
+
 
         switchToDictating();
 
         cumulativeResults = new StringBuilder();
 
-        ReadInterpreter.getInstance().configure(speaker);
+
     }
 
     @Override
@@ -107,7 +128,6 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
     protected void onPause() {
         super.onPause();
         Log.d(TAG, "onPause invoked");
-        unmute_MUSIC_STREAM();
         if (recognizer != null) {
             recognizer.destroy();
         }
@@ -124,7 +144,6 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
             recognizer.setRecognitionListener(this);
         }
         Log.d(TAG, "listenForVoiceInBackground() invoked");
-        //mute_MUSIC_STREAM();
         if (recognizerReady) {
             Log.d(TAG, "recognizer is ready");
 
@@ -140,12 +159,23 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
 
     private void updateDictationOutputTextView(ResultsUnderEvaluation resultsUnderEvaluation) {
         StringBuilder sb = new StringBuilder();
+        sb.append(document.returnEntireDocumentAsString());
         for (Word word : resultsUnderEvaluation.getCurrentResultsWordList()) {
             if (word.getType() != WordType.KEYWORD) {
                 sb.append(word.getWordString() + " ");
             }
         }
-        dictationOutputTV.setText(cumulativeResults.toString() + " " + sb.toString());
+        dictationOutputTV.setText(/*cumulativeResults.toString() + " " + */sb.toString());
+    }
+
+    void updateIsSpeakingIndicator(boolean isSpeaking) {
+        if (isSpeaking) {
+            isSpeakingIndicatorTV.setBackgroundColor(Color.RED);
+            isSpeakingIndicatorTV.setText("Speaking");
+        } else {
+            isSpeakingIndicatorTV.setBackgroundColor(Color.GREEN);
+            isSpeakingIndicatorTV.setText("Quiescent");
+        }
     }
 
     private void updateInterpreterSelectorTV() {
@@ -208,6 +238,8 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
     @Override
     public void onError(int error) {
         startDeadTime = System.nanoTime();
+        String toastText = "Error : (" + error + ") " + ERROR_CODES[error - 1];
+        Toast.makeText(this, toastText, Toast.LENGTH_SHORT).show();
         switch (error) {
             case SpeechRecognizer.ERROR_CLIENT:
             case SpeechRecognizer.ERROR_RECOGNIZER_BUSY:
@@ -221,6 +253,9 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
                 recoverFromError();
                 break;
             }
+            case SpeechRecognizer.ERROR_NO_MATCH:
+                recoverFromError();
+                listenForVoiceInBackground();
             default : {
                 Log.d(TAG, "onError : " + error);
                 Log.d(TAG, "Collosal motherfucking other type error occurred. Apols.");
@@ -228,11 +263,13 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
             }
         }
 
-
+        // todo Diagnose problems with the calling intent by removing extras one-by-one - provide toast and report to indicate remedial action needed.
     }
 
     @Override
     public void onResults(Bundle results) {
+        Log.d(TAG, "onResults() invoked");
+
         processResults(results);
 
         for (Word word : resultsUnderEvaluation.getCurrentResultsWordList()) {
@@ -241,24 +278,27 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
             }
         }
 
+        document.commitResults(resultsUnderEvaluation, storage);
+
         // Start listening again immediately.
         listenForVoiceInBackground();
-/*
-        unmute_MUSIC_STREAM();
-*/
     }
 
     @Override
     public void onPartialResults(Bundle partialResults) {
+        Log.d(TAG, "onPartialResults() invoked");
         processResults(partialResults);
     }
 
     private void processResults(Bundle results) {
+        updateIsSpeakingIndicator(speaker.isSpeaking());
         List<String> res = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
         boolean newWordAdded = currentInterpreter.interpret(
+                document,
                 resultsUnderEvaluation,
                 res.get(0),
-                masterState);
+                masterState,
+                speaker.isSpeaking());
         if (newWordAdded) {
             Log.d(TAG, res.get(0));
 
@@ -282,24 +322,6 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
     @Override
     public void onEvent(int eventType, Bundle params) {
 
-    }
-
-    private void mute_MUSIC_STREAM() {
-        AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        audioManager.adjustStreamVolume(
-                AudioManager.STREAM_MUSIC,
-                AudioManager.ADJUST_MUTE,
-                0
-        );
-    }
-
-    private void unmute_MUSIC_STREAM() {
-        AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        audioManager.adjustStreamVolume(
-                AudioManager.STREAM_MUSIC,
-                AudioManager.ADJUST_UNMUTE,
-                0
-        );
     }
 
     private void recoverFromError() {
