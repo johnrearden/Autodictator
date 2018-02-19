@@ -1,23 +1,24 @@
 package com.intricatech.autodictator;
 
-import java.util.List;
-
 /**
  * Created by Bolgbolg on 07/02/2018.
  */
 
 public class StandardInterpreter extends AbstractInterpreter {
 
+    public static String TAG;
     public static final StandardInterpreter instance = new StandardInterpreter();
 
     public static StandardInterpreter getInstance() {
         return instance;
     }
 
-    private StandardInterpreter() {}
+    private StandardInterpreter() {
+        TAG = getClass().getSimpleName();
+    }
 
     @Override
-    public boolean interpret(
+    public InterpreterReturnPacket interpret(
             Document document,
             ResultsUnderEvaluation resultsUnderEvaluation,
             String resultsFromRecognizer,
@@ -30,37 +31,11 @@ public class StandardInterpreter extends AbstractInterpreter {
         // the length of ResultsUnderEvaluation.cumulativeCurrentResults, the recognizer has provided
         // new results, and we must update our cumulative results.
         if ( !resultsFromRecognizer.equals(cumulativeResults)) {
-            updateResultsUnderEvaluation(
-                    resultsUnderEvaluation,
+            resultsUnderEvaluation.updateCurrentResultsWordList(
                     resultsFromRecognizer,
                     masterState,
                     isSpeaking);
-            return true;
-        } else return false;
+            return new InterpreterReturnPacket(true, false);
+        } else return new InterpreterReturnPacket(false, false);
     }
-
-    private void updateResultsUnderEvaluation(
-            ResultsUnderEvaluation resultsUnderEvaluation,
-            String resultsFromRecognizer,
-            MainActivity.MasterState masterState,
-            boolean isSpeaking) {
-        List<Word> wordList = resultsUnderEvaluation.getCurrentResultsWordList();
-        resultsUnderEvaluation.overwriteCurrentResults(resultsFromRecognizer);
-        String[] splitterArray = resultsFromRecognizer.split(" ");
-        wordList.clear();
-        WordType wordType;
-        for (String s : splitterArray) {
-            if (isSpeaking) {
-                wordType = WordType.IGNORED;
-            } else {
-                wordType = masterState == MainActivity.MasterState.EDITING ?
-                        WordType.KEYWORD : WordType.NORMAL;
-            }
-            wordList.add(new Word(s, wordType));
-
-        }
-
-        // todo - Further split words by punctuation marks returned by the recognizer.
-    }
-
 }

@@ -161,7 +161,7 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
         StringBuilder sb = new StringBuilder();
         sb.append(document.returnEntireDocumentAsString());
         for (Word word : resultsUnderEvaluation.getCurrentResultsWordList()) {
-            if (word.getType() != WordType.KEYWORD) {
+            if (word.getType() != WordType.KEYWORD && word.getType() != WordType.IGNORED) {
                 sb.append(word.getWordString() + " ");
             }
         }
@@ -169,6 +169,7 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
     }
 
     void updateIsSpeakingIndicator(boolean isSpeaking) {
+        Log.d(TAG, "updateIsSpeakingIndicator() invoked");
         if (isSpeaking) {
             isSpeakingIndicatorTV.setBackgroundColor(Color.RED);
             isSpeakingIndicatorTV.setText("Speaking");
@@ -293,13 +294,13 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
     private void processResults(Bundle results) {
         updateIsSpeakingIndicator(speaker.isSpeaking());
         List<String> res = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-        boolean newWordAdded = currentInterpreter.interpret(
+        InterpreterReturnPacket packet = currentInterpreter.interpret(
                 document,
                 resultsUnderEvaluation,
                 res.get(0),
                 masterState,
                 speaker.isSpeaking());
-        if (newWordAdded) {
+        if (packet.resultsUnderEvaluationChanged) {
             Log.d(TAG, res.get(0));
 
             // Check last 2 words for match with the master keywords:
@@ -316,6 +317,9 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
             if (appropriateIntSel != interpreterSelector) {
                 changeInterpreter(appropriateIntSel);
             }
+        }
+        if (packet.finishedInterpreting) {
+            changeInterpreter(InterpreterSelector.STANDARD_INTERPRETER);
         }
     }
 

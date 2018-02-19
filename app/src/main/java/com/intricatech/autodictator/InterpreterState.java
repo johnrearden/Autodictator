@@ -12,7 +12,7 @@ public interface InterpreterState {
      * @param resultsFromRecognizer
      * @return TRUE if the resultsUnderEvaluation has been changed, FALSE otherwise.
      */
-    public boolean interpret(
+    public InterpreterReturnPacket interpret(
             Document document,
             ResultsUnderEvaluation resultsUnderEvaluation,
             String resultsFromRecognizer,

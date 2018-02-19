@@ -1,5 +1,7 @@
 package com.intricatech.autodictator;
 
+import android.util.Log;
+
 import java.util.LinkedList;
 import java.util.List;
 
@@ -9,11 +11,36 @@ import java.util.List;
 
 public class ResultsUnderEvaluation {
 
+    private static String TAG;
+
     private String cumulativeCurrentResults;
     private List<Word> currentResultsWordList;
 
     public ResultsUnderEvaluation() {
+        TAG = getClass().getSimpleName();
         currentResultsWordList = new LinkedList<>();
+    }
+
+    public void updateCurrentResultsWordList(
+            String resultsFromRecognizer,
+            MainActivity.MasterState masterState,
+            boolean isSpeaking) {
+        overwriteCurrentResults(resultsFromRecognizer);
+        String[] splitterArray = resultsFromRecognizer.split(" ");
+        currentResultsWordList.clear();
+        WordType wordType;
+        for (String s : splitterArray) {
+            if (isSpeaking) {
+                wordType = WordType.IGNORED;
+            } else {
+                wordType = masterState == MainActivity.MasterState.EDITING ?
+                        WordType.KEYWORD : WordType.NORMAL;
+            }
+            currentResultsWordList.add(new Word(s, wordType));
+        }
+        Log.d(TAG, this.toString());
+
+        // todo - Further split words by punctuation marks returned by the recognizer.
     }
 
     public String getCumulativeCurrentResults() {
@@ -26,6 +53,10 @@ public class ResultsUnderEvaluation {
 
     public List<Word> getCurrentResultsWordList() {
         return currentResultsWordList;
+    }
+
+    public void clearWordList() {
+        currentResultsWordList.clear();
     }
 
     public Word getLastWord() {
@@ -50,5 +81,22 @@ public class ResultsUnderEvaluation {
         currentResultsWordList.get(size - 2).declareKeyword(true);
         currentResultsWordList.get(size - 1).declareKeyword(true);
 
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder("ResultsUnderEvaluation.currentResultsWordList\n");
+        for (Word w : currentResultsWordList) {
+            sb.append(w.getWordString() + "(" + w.getType().toString() + ") ");
+        }
+        return sb.toString();
+    }
+
+    public static String getWordListAsString(List<Word> list) {
+        StringBuilder sb = new StringBuilder("ResultsUnderEvaluation.currentResultsWordList\n");
+        for (Word w : list) {
+            sb.append(w.getWordString() + "(" + w.getType().toString() + ") ");
+        }
+        return sb.toString();
     }
 }

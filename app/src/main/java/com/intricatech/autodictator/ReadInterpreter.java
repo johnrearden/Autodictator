@@ -25,7 +25,7 @@ public class ReadInterpreter extends AbstractInterpreter {
     private ReadInterpreter() {}
 
     @Override
-    public boolean interpret(Document document,
+    public InterpreterReturnPacket interpret(Document document,
                              ResultsUnderEvaluation resultsUnderEvaluation,
                              String resultsFromRecognizer,
                              MainActivity.MasterState masterState,
@@ -39,8 +39,9 @@ public class ReadInterpreter extends AbstractInterpreter {
             Log.d(TAG, "'EVERYTHING' heard .... reading");
             Log.d(TAG, resultsFromRecognizer);
             textSpeaker.addSpeechToQueue(document.returnEntireDocumentAsString());
+            return new InterpreterReturnPacket(false, true);
         }
 
-        return false;
+        return new InterpreterReturnPacket(false, false);
     }
 }

@@ -9,7 +9,7 @@ public abstract class AbstractInterpreter implements InterpreterState {
     static final String SWITCH_TO_EDIT_KEYWORD = "Ok so";
 
     @Override
-    public abstract boolean interpret(Document document,
+    public abstract InterpreterReturnPacket interpret(Document document,
                                       ResultsUnderEvaluation resultsUnderEvaluation,
                                       String resultsFromRecognizer,
                                       MainActivity.MasterState masterState,

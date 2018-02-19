@@ -1,7 +1,10 @@
 package com.intricatech.autodictator;
 
+import android.util.Log;
+
 import java.util.LinkedList;
 import java.util.List;
+import java.util.ListIterator;
 
 /**
  * Created by Bolgbolg on 07/02/2018.
@@ -9,6 +12,7 @@ import java.util.List;
 
 public class Document {
 
+    public static String TAG;
     public static final char[] SENTENCE_TERMINATORS = new char[]{'.', '!', '?'};
 
     public static final char[] PUNCTUATION_MARKS_WITHIN_SENTENCES = new char[]{',', ':', ';'};
@@ -21,6 +25,7 @@ public class Document {
     private int currentParagraphIndex;
 
     public Document() {
+        TAG = getClass().getSimpleName();
         paragraphList = new LinkedList<>();
         currentParagraphIndex = 0;
         currentSentenceIndex = 0;
@@ -34,15 +39,19 @@ public class Document {
 
     public void commitResults(ResultsUnderEvaluation results, StorageInterface storage) {
 
-        // Separate out the punctuation marks from the words themselves.
+        // Separate out the punctuation marks from the words themselves, and clear the source
+        // array to get ready for the next set of results
         List<Word> punctuatedList = parsePunctuation(results.getCurrentResultsWordList());
+        results.clearWordList();
 
-        // Remove ignored words (heard while TextSpeaker is speaking.
-        for (Word word : punctuatedList) {
-            if (word.getType() == WordType.IGNORED) {
-                punctuatedList.remove(word);
+        // Remove ignored words (heard while TextSpeaker is speaking).
+        ListIterator<Word> iter = punctuatedList.listIterator();
+        while(iter.hasNext()) {
+            if (iter.next().getType() == WordType.IGNORED) {
+                iter.remove();
             }
         }
+        Log.d(TAG, ResultsUnderEvaluation.getWordListAsString(punctuatedList));
 
         if (currentParagraph == null) {
             currentParagraph = new Paragraph();
@@ -66,9 +75,11 @@ public class Document {
         }
 
         // If the current sentence is not complete, store it.
-        WordType typeOfLastWord = punctuatedList.get(punctuatedList.size() - 1).getType();
-        if (typeOfLastWord != WordType.PUNC_END_SENTENCE) {
-            storage.storeSentence(currentSentence);
+        if (punctuatedList.size() > 0) {
+            WordType typeOfLastWord = punctuatedList.get(punctuatedList.size() - 1).getType();
+            if (typeOfLastWord != WordType.PUNC_END_SENTENCE) {
+                storage.storeSentence(currentSentence);
+            }
         }
     }
 
