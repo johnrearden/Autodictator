@@ -18,17 +18,17 @@ public class Document {
     public static final char[] PUNCTUATION_MARKS_WITHIN_SENTENCES = new char[]{',', ':', ';'};
 
     private List<Paragraph> paragraphList;
+    private long documentID;
 
     private Sentence currentSentence;
     private Paragraph currentParagraph;
-    private int currentSentenceIndex;
     private int currentParagraphIndex;
 
-    public Document() {
+    public Document(long docID) {
         TAG = getClass().getSimpleName();
+        this.documentID = docID;
         paragraphList = new LinkedList<>();
         currentParagraphIndex = 0;
-        currentSentenceIndex = 0;
         currentSentence = null;
         currentParagraph = null;
     }
@@ -37,28 +37,30 @@ public class Document {
         paragraphList.add(paragraph);
     }
 
-    public void commitResults(ResultsUnderEvaluation results, StorageInterface storage) {
+    public void commitResults(Results results, Storable storage) {
 
         // Separate out the punctuation marks from the words themselves, and clear the source
         // array to get ready for the next set of results
-        List<Word> punctuatedList = parsePunctuation(results.getCurrentResultsWordList());
+        List<Word> punctuatedList = parsePunctuation(results.getWordList());
         results.clearWordList();
 
-        // Remove ignored words (heard while TextSpeaker is speaking).
+        // Remove ignored words (heard while TextSpeaker is speaking), and keywords.
         ListIterator<Word> iter = punctuatedList.listIterator();
         while(iter.hasNext()) {
-            if (iter.next().getType() == WordType.IGNORED) {
+            Word word = iter.next();
+            if (word.getType() == WordType.IGNORED || word.getType() == WordType.KEYWORD) {
                 iter.remove();
             }
         }
-        Log.d(TAG, ResultsUnderEvaluation.getWordListAsString(punctuatedList));
+        Log.d(TAG, "post-removal list : " + Results.getWordListAsString(punctuatedList));
 
         if (currentParagraph == null) {
-            currentParagraph = new Paragraph();
+            currentParagraph = new Paragraph(paragraphList.size());
             addParagraph(currentParagraph);
         }
         if (currentSentence == null) {
-            currentSentence = new Sentence();
+            currentSentence = new Sentence(currentParagraph.getIndex());
+            currentSentence.setIndexOfAppearance(0);
         }
 
         // Add the punctuatedList to the Document word by word. Each time a sentence-ending
@@ -68,9 +70,11 @@ public class Document {
             currentSentence.addWord(word);
             if (word.getType() == WordType.PUNC_END_SENTENCE) {
                 currentParagraph.addSentence(currentSentence);
-                storage.storeSentence(currentSentence);
-                currentSentence = new Sentence();
-                currentSentenceIndex++;
+                storeSentence(storage, currentSentence, documentID);
+                int currentIndex = currentSentence.getIndexOfAppearance();
+                currentSentence = new Sentence(currentParagraph.getIndex());
+                currentIndex++;
+                currentSentence.setIndexOfAppearance(currentIndex);
             }
         }
 
@@ -78,10 +82,12 @@ public class Document {
         if (punctuatedList.size() > 0) {
             WordType typeOfLastWord = punctuatedList.get(punctuatedList.size() - 1).getType();
             if (typeOfLastWord != WordType.PUNC_END_SENTENCE) {
-                storage.storeSentence(currentSentence);
+                storeSentence(storage, currentSentence, documentID);
             }
         }
     }
+
+
 
     public String returnEntireDocumentAsString() {
         StringBuilder sb = new StringBuilder();
@@ -94,16 +100,19 @@ public class Document {
         return sb.toString();
     }
 
-    public void startNewParagraph() {
-
-    }
-
     public static List<Word> parsePunctuation(List<Word> suppliedList) {
+
         List<Word> tempList = new LinkedList();
         for (Word suppliedWord : suppliedList) {
 
             String s = suppliedWord.getWordString();
+            //Log.d(TAG, "word == " + s);
+
             int l = s.length();
+            if (l == 0) {
+                Log.d(TAG, "Word found with length of 0. WTF");
+                continue;
+            }
             char lastChar = s.charAt(l - 1);
             boolean lastCharIsPunctuationWithinSentence = charIsPunctuationWithinSentence(lastChar);
             boolean lastCharIsSentenceEnder = characterIsSentenceEnder(lastChar);
@@ -177,4 +186,45 @@ public class Document {
         return sb.toString();
     }
 
+    public static List<Word> getWordStringAsList(String wordString) {
+        List<Word> wordList = new LinkedList<>();
+        String[] splitterArray = wordString.split(" ");
+        for (String s : splitterArray) {
+            wordList.add(new Word(s, WordType.NORMAL));
+        }
+
+        // Parse the wordList for punctuation marks, treating these as words in their own right.
+        wordList = parsePunctuation(wordList);
+
+        return wordList;
+
+    }
+
+    public List<Paragraph> getParagraphList() {
+        return paragraphList;
+    }
+
+    public long getDocumentID() {
+        return documentID;
+    }
+
+    /**
+     * Utility method which combines storing the sentence and afterwards setting the
+     * sentence's storageID based on the return value of the storeSentence() call.
+     * @param storage
+     * @param sentence
+     * @param documentID
+     */
+    private void storeSentence(Storable storage, Sentence sentence, long documentID) {
+        long storageId = storage.storeSentence(sentence, documentID);
+        sentence.setStorageID(storageId);
+    }
+
+    public String toString() {
+        StringBuilder sb = new StringBuilder("ID : " + documentID + "\n");
+        for (Paragraph p : paragraphList) {
+            sb.append(p.toString() + "\n");
+        }
+        return sb.toString() + "\n";
+    }
 }

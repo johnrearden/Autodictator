@@ -22,14 +22,21 @@
             android:text="Start dictation"
             android:textAppearance="@style/TextAppearance.AppCompat.Large" />
 
+        <Button
+            android:id="@+id/delete_doc_from_db"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Delete document from DB" />
+
         <TextView
             android:id="@+id/dictation_output"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="@android:drawable/dialog_frame"
+            android:maxLines="10"
+            android:minLines="10"
             android:text="This is where your text will appear ...."
-            android:textColor="#ffffff"
-            android:minLines="5"/>
+            android:textColor="#ffffff" />
 
         <TextView
             android:id="@+id/interpreter_selector"
@@ -61,6 +68,18 @@
             android:textAlignment="center"
             android:textColor="#ffffff"
             android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/is_listening_indicator"
+            android:background="#aaaaaa"
+            android:layout_gravity="center"
+            android:padding="5dp" android:textAlignment="center"
+            android:textColor="#ffffff"
+            android:textStyle="bold"
+
+            />
 
 
     </LinearLayout>

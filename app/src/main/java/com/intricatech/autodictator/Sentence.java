@@ -10,16 +10,15 @@ import java.util.List;
 public class Sentence {
 
     private List<Word> wordList;
-    private int storageID;
+    private long storageID;
     private int indexOfAppearance;
+    private int paragraphIndex;
 
-    public Sentence() {
+    public Sentence(int paragraphIndex) {
         wordList = new LinkedList<>();
         storageID = -1;
-        indexOfAppearance = -1;
+        this.indexOfAppearance = paragraphIndex;
     }
-
-
 
     public List<Word> getWordList() {
         return wordList;
@@ -29,11 +28,21 @@ public class Sentence {
         wordList.add(word);
     }
 
-    public int getStorageID() {
+    public String getWordListAsString() {
+        StringBuilder sb = new StringBuilder();
+        int size = wordList.size();
+        for (Word word : wordList) {
+            sb.append(word.getWordString() + " ");
+        }
+        sb.deleteCharAt(sb.length() - 1); // delete final trailing space.
+        return sb.toString();
+    }
+
+    public long getStorageID() {
         return storageID;
     }
 
-    public void setStorageID(int storageID) {
+    public void setStorageID(long storageID) {
         this.storageID = storageID;
     }
 
@@ -43,5 +52,13 @@ public class Sentence {
 
     public void setIndexOfAppearance(int indexOfAppearance) {
         this.indexOfAppearance = indexOfAppearance;
+    }
+
+    public int getParagraphIndex() {
+        return paragraphIndex;
+    }
+
+    public String toString() {
+        return "index : " + indexOfAppearance + ", para : " + paragraphIndex + " : " + getWordListAsString();
     }
 }

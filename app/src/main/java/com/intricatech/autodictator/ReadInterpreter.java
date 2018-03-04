@@ -1,47 +1,38 @@
 package com.intricatech.autodictator;
 
-import android.util.Log;
-
 /**
  * Created by Bolgbolg on 11/02/2018.
  */
 
 public class ReadInterpreter extends AbstractInterpreter {
 
-    public static final String TAG = "ReadInterpreter";
+    public static String TAG;
 
     public static final ReadInterpreter instance = new ReadInterpreter();
-
     public static ReadInterpreter getInstance() {
         return instance;
     }
 
-    private static SpeakerFacade textSpeaker;
+    private ReadInterpreter() {TAG = getClass().getSimpleName();}
 
-    public static void configure(SpeakerFacade speaker) {
-        textSpeaker = speaker;
+    private InterpreterClient client;
+
+    public void configure(InterpreterClient client) {
+        this.client = client;
     }
 
-    private ReadInterpreter() {}
-
     @Override
-    public InterpreterReturnPacket interpret(Document document,
-                             ResultsUnderEvaluation resultsUnderEvaluation,
-                             String resultsFromRecognizer,
-                             MainActivity.MasterState masterState,
-                             boolean isSpeaking) {
+    public void interpret(String resultsFromRecognizer, Results results) {
 
         String[] splitterArray = resultsFromRecognizer.split(" ");
         String lastWord = splitterArray[splitterArray.length - 1];
-        Log.d(TAG, "last word in resultsFromRecognizer == " + lastWord);
+        //Log.d(TAG, "last word in resultsFromRecognizer == " + lastWord);
 
         if (lastWord.toUpperCase().equals("EVERYTHING")) {
-            Log.d(TAG, "'EVERYTHING' heard .... reading");
-            Log.d(TAG, resultsFromRecognizer);
-            textSpeaker.addSpeechToQueue(document.returnEntireDocumentAsString());
-            return new InterpreterReturnPacket(false, true);
+            //Log.d(TAG, "'EVERYTHING' heard .... reading");
+            //Log.d(TAG, resultsFromRecognizer);
+            client.getSpeaker().addSpeechToQueue(client.getDocument().returnEntireDocumentAsString());
+            client.onFinishedInterpreting();
         }
-
-        return new InterpreterReturnPacket(false, false);
     }
 }

@@ -10,12 +10,12 @@ import java.util.List;
 public class Paragraph {
 
     private List<Sentence> sentenceList;
+    private int index;
 
-    public Paragraph() {
+    public Paragraph(int index) {
         sentenceList = new LinkedList<>();
+        this.index = index;
     }
-
-
 
     public List<Sentence> getSentenceList() {
         return sentenceList;
@@ -23,5 +23,17 @@ public class Paragraph {
 
     public void addSentence(Sentence sentence) {
         sentenceList.add(sentence);
+    }
+
+    public int getIndex() {
+        return index;
+    }
+
+    public String toString() {
+        StringBuilder sb = new StringBuilder("Paragraph " + index + "\n");
+        for (Sentence s : sentenceList) {
+            sb.append(s.toString() + "\n");
+        }
+        return sb.toString() + "\n\n";
     }
 }

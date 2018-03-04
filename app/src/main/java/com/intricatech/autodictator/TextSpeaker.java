@@ -1,25 +1,31 @@
 package com.intricatech.autodictator;
 
 import android.content.Context;
+import android.os.Handler;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.util.Log;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 /**
  * Created by Bolgbolg on 07/02/2018.
  */
 
-public class TextSpeaker implements SpeakerFacade{
+public class TextSpeaker implements SpeakerFacade, SpeechDirector{
 
     private static String TAG;
     private TextToSpeech ttsEngine;
-    private boolean isSpeaking;
     private int utteranceID;
+    private Handler handler;
 
-    public TextSpeaker(Context context) {
+    private List<SpeechObserver> observers;
+
+    public TextSpeaker(Context context, Handler handler) {
         TAG = getClass().getSimpleName();
+        this.handler = handler;
         utteranceID = 0;
         ttsEngine = new TextToSpeech(context, new TextToSpeech.OnInitListener() {
             @Override
@@ -33,25 +39,25 @@ public class TextSpeaker implements SpeakerFacade{
                 ttsEngine.setOnUtteranceProgressListener(new UtteranceProgressListener() {
                     @Override
                     public void onStart(String utteranceId) {
-                        isSpeaking = true;
-                        Log.d(TAG, "onStart() invoked ... " + utteranceId + ", isSpeaking == " + isSpeaking);
+                        onSpeechStarted();
+                        Log.d(TAG, "onStart() invoked ... " + utteranceId);
                     }
 
                     @Override
                     public void onDone(String utteranceId) {
-                        isSpeaking = false;
-                        Log.d(TAG, "onDone() invoked... " + utteranceId + ", isSpeaking == " + isSpeaking);
+                        onSpeechEnded();
+                        Log.d(TAG, "onDone() invoked... " + utteranceId);
                     }
 
                     @Override
                     public void onError(String utteranceId) {
-                        isSpeaking = false;
-                        Log.d(TAG, "onError() invoked... " + utteranceId + ", isSpeaking == " + isSpeaking);
+                        onSpeechEnded();
+                        Log.d(TAG, "onError() invoked... " + utteranceId);
                     }
                 });
             }
         });
-
+        observers = new ArrayList<>();
     }
 
     @Override
@@ -66,12 +72,41 @@ public class TextSpeaker implements SpeakerFacade{
         ttsEngine.speak(utterance, TextToSpeech.QUEUE_ADD, null, idString);
     }
 
-    @Override
-    public boolean isSpeaking() {
-        return isSpeaking;
-    }
-
     public void setSpeechRate(float newRate) {
         ttsEngine.setSpeechRate(newRate);
+    }
+
+    @Override
+    public void register(SpeechObserver observer) {
+        observers.add(observer);
+    }
+
+    @Override
+    public void unregister(SpeechObserver observer) {
+        observers.remove(observer);
+    }
+
+    @Override
+    public void onSpeechStarted() {
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                for (SpeechObserver ob : observers) {
+                    ob.onSpeechStarted();
+                }
+            }
+        });
+    }
+
+    @Override
+    public void onSpeechEnded() {
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                for (SpeechObserver ob : observers) {
+                    ob.onSpeechEnded();
+                }
+            }
+        });
     }
 }

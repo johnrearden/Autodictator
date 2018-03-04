@@ -26,6 +26,10 @@ public class Word {
         return type;
     }
 
+    public void setType(WordType type) {
+        this.type = type;
+    }
+
     public void declareKeyword(boolean keyword) {
         type = WordType.KEYWORD;
     }

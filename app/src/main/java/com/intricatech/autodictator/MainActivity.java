@@ -1,13 +1,13 @@
 package com.intricatech.autodictator;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Handler;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
-import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
@@ -20,7 +20,10 @@ import android.widget.Toast;
 
 import java.util.List;
 
-public class MainActivity extends AppCompatActivity implements RecognitionListener {
+public class MainActivity extends AppCompatActivity
+        implements RecognitionListener,
+                   InterpreterClient,
+                   SpeechObserver{
 
     public static final String[] ERROR_CODES = new String[] {
             "ERROR_NETWORK_TIMEOUT (1)",
@@ -33,6 +36,9 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
             "ERROR_RECOGNIZER_BUSY (8)",
             "ERROR_INSUFFICIENT_PERMISSIONS (9)",
     };
+    public static final String DOC_PREFS = "DOCUMENT_PREFERENCES";
+    public static final String LAST_USED_DOC_ID = "LAST_USED_DOC_ID";
+    public static final long SOUND_METER_SAMPLING_DELAY = 100;
 
     private final int REQUEST_SPEECH_RECOGNIZER = 1000;
     private final String SPEAK_PROMPT = "Speak now, earthling!";
@@ -43,26 +49,31 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
     private TextView interpreterSelectorTV;
     private TextView masterStateIndicatorTV;
     private TextView isSpeakingIndicatorTV;
+    private TextView isListeningIndicatorTV;
     private Button startDictationButton;
-    private StringBuilder cumulativeResults;
+    private Button deleteDocFromDBButton;
 
     private SpeechRecognizer recognizer;
     private boolean recognizerReady = true;
+    private boolean isListening;
+    private boolean isSpeaking;
 
     private SpeakerFacade speaker;
-    private StorageInterface storage;
+    private Storable storage;
     private AbstractInterpreter currentInterpreter;
     private InterpreterSelector interpreterSelector;
-    private ResultsUnderEvaluation resultsUnderEvaluation;
+    private Results results;
     private Document document;
+    private SoundMeter soundMeter;
+    private ListeningIndicatorHum indicatorHum;
+    private Handler uiUpdateHandler;
+    private Handler soundLevelHandler;
+    private SharedPreferences docPrefs;
+    private SharedPreferences.Editor docPrefsEditor;
 
     private long startListeningTime;
     private long startDeadTime;
 
-    enum MasterState {
-        EDITING,
-        DICTATING
-    }
     private MasterState masterState;
 
     @Override
@@ -74,79 +85,115 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-        FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
-        fab.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                        .setAction("Action", null).show();
-            }
-        });
+        // Configure singleton interpreters.
+        StandardInterpreter.getInstance().configure(this);
+        ReadInterpreter.getInstance().configure(this);
 
         // Create objects.
         StorageFacade.initialize(getApplicationContext());
         storage = StorageFacade.getInstance();
         currentInterpreter = StandardInterpreter.getInstance();
         interpreterSelector = InterpreterSelector.STANDARD_INTERPRETER;
-        resultsUnderEvaluation = new ResultsUnderEvaluation();
-        document = storage.retrieveEntireDocument(0);
+        currentInterpreter = interpreterSelector.getInterpreter();
+        results = new Results();
+        uiUpdateHandler = new Handler();
+        soundLevelHandler = new Handler();
+        speaker = new TextSpeaker(getApplicationContext(), uiUpdateHandler);
+        ((SpeechDirector)speaker).register(this);
+        recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+        recognizer.setRecognitionListener(this);
+        docPrefs = getSharedPreferences(DOC_PREFS, MODE_PRIVATE);
+        docPrefsEditor = docPrefs.edit();
+        soundMeter = new SoundMeter();
 
         // Initialize GUI elements.
         dictationOutputTV = findViewById(R.id.dictation_output);
         interpreterSelectorTV = findViewById(R.id.interpreter_selector);
         masterStateIndicatorTV = findViewById(R.id.master_state_indicator);
         isSpeakingIndicatorTV = findViewById(R.id.isspeaking_indicator);
+        isListeningIndicatorTV = findViewById(R.id.is_listening_indicator);
         updateInterpreterSelectorTV();
+        updateIsSpeakingIndicator(false);
 
-        startDictationButton = (Button) findViewById(R.id.start_dictation_button);
+        startDictationButton = findViewById(R.id.start_dictation_button);
         startDictationButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 listenForVoiceInBackground();
             }
         });
-
-        speaker = new TextSpeaker(getApplicationContext());
-        ReadInterpreter.configure(speaker);
-        recognizer = SpeechRecognizer.createSpeechRecognizer(this);
-        recognizer.setRecognitionListener(this);
-
+        deleteDocFromDBButton = findViewById(R.id.delete_doc_from_db);
+        deleteDocFromDBButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                storage.deleteDocument(document.getDocumentID());
+                { // todo - remove duplicated code - see onResume()
+                    long docID = storage.createNewDocument("New Doc");
+                    document = new Document(docID);
+                    docPrefsEditor.putLong(LAST_USED_DOC_ID, docID);
+                    docPrefsEditor.commit();
+                }
+                results = new Results();
+                updateDictationOutputTextView(results);
+            }
+        });
 
         switchToDictating();
-
-        cumulativeResults = new StringBuilder();
-
-
     }
 
     @Override
-    protected void onPostResume() {
-        super.onPostResume();
+    protected void onResume() {
+        super.onResume();
+
+        indicatorHum = new ListeningIndicatorHum(getApplicationContext());
+
+        ((StorageFacade)storage).logAllDatabaseTables();
+        if (storage.doAnyDocumentsExist() == false) {
+            long docID = storage.createNewDocument("New Doc");
+            document = new Document(docID);
+            docPrefsEditor.putLong(LAST_USED_DOC_ID, docID);
+            docPrefsEditor.commit();
+            //Log.d(TAG, "No documents in database, created new Document (ID == " + docID + ")");
+        } else {
+            long lastUsedDocID = docPrefs.getLong(LAST_USED_DOC_ID, 1);
+            document = storage.retrieveEntireDocument(lastUsedDocID);
+            updateDictationOutputTextView(results);
+            //Log.d(TAG, "Retrieved last used document from database (ID == " + lastUsedDocID + ")");
+        }
+        Log.d(TAG, document.toString());
+        soundMeter.start();
+        soundLevelHandler.postDelayed(pollSoundLevelTask, SOUND_METER_SAMPLING_DELAY);
+        isListening = false;
+        isSpeaking = false;
+        updateIsListeningIndicatorTV(isListening);
+        updateIsSpeakingIndicator(isSpeaking);
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         Log.d(TAG, "onPause invoked");
+        Log.d(TAG, document.toString());
         if (recognizer != null) {
             recognizer.destroy();
         }
+        storage.storeEntireDocument(document);
+        docPrefsEditor.putLong(LAST_USED_DOC_ID, document.getDocumentID());
+        docPrefsEditor.commit();
+        soundLevelHandler.removeCallbacks(pollSoundLevelTask);
+        soundMeter.stop();
+        indicatorHum.onPause();
     }
 
     private void listenForVoiceInBackground() {
-
-        // Default to DICTATING each time the listener is restarted.
-        changeInterpreter(InterpreterSelector.STANDARD_INTERPRETER);
-        switchToDictating();
-
+        onListeningStarted();
+        Log.d(TAG, "listenForVoiceInBackground() invoked");
         if (recognizer == null) {
             recognizer = SpeechRecognizer.createSpeechRecognizer(this);
             recognizer.setRecognitionListener(this);
         }
-        Log.d(TAG, "listenForVoiceInBackground() invoked");
         if (recognizerReady) {
             Log.d(TAG, "recognizer is ready");
-
             Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
             intent.putExtra(RecognizerIntent.EXTRA_PROMPT, SPEAK_PROMPT);
@@ -157,10 +204,10 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
         }
     }
 
-    private void updateDictationOutputTextView(ResultsUnderEvaluation resultsUnderEvaluation) {
+    private void updateDictationOutputTextView(Results results) {
         StringBuilder sb = new StringBuilder();
         sb.append(document.returnEntireDocumentAsString());
-        for (Word word : resultsUnderEvaluation.getCurrentResultsWordList()) {
+        for (Word word : results.getWordList()) {
             if (word.getType() != WordType.KEYWORD && word.getType() != WordType.IGNORED) {
                 sb.append(word.getWordString() + " ");
             }
@@ -171,11 +218,12 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
     void updateIsSpeakingIndicator(boolean isSpeaking) {
         Log.d(TAG, "updateIsSpeakingIndicator() invoked");
         if (isSpeaking) {
-            isSpeakingIndicatorTV.setBackgroundColor(Color.RED);
             isSpeakingIndicatorTV.setText("Speaking");
+            isSpeakingIndicatorTV.setBackgroundColor(Color.RED);
         } else {
-            isSpeakingIndicatorTV.setBackgroundColor(Color.GREEN);
             isSpeakingIndicatorTV.setText("Quiescent");
+            isSpeakingIndicatorTV.setBackgroundColor(Color.GREEN);
+
         }
     }
 
@@ -184,26 +232,12 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
         interpreterSelectorTV.setBackgroundColor(interpreterSelector.color);
     }
 
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.menu_main, menu);
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-        int id = item.getItemId();
-
-        //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
-            return true;
+    private void updateIsListeningIndicatorTV(boolean isListening) {
+        if (isListening) {
+            isListeningIndicatorTV.setText("isListening : true");
+        } else {
+            isListeningIndicatorTV.setText("isListening : false");
         }
-
-        return super.onOptionsItemSelected(item);
     }
 
     @Override
@@ -239,28 +273,30 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
     @Override
     public void onError(int error) {
         startDeadTime = System.nanoTime();
+        onListeningStopped();
         String toastText = "Error : (" + error + ") " + ERROR_CODES[error - 1];
         Toast.makeText(this, toastText, Toast.LENGTH_SHORT).show();
         switch (error) {
             case SpeechRecognizer.ERROR_CLIENT:
             case SpeechRecognizer.ERROR_RECOGNIZER_BUSY:
                 Log.d(TAG, "onError : " + error);
-                recoverFromError();
+                murderMalfunctioningRecognizerAndDisposeOfTheBody();
                 break;
             case SpeechRecognizer.ERROR_SPEECH_TIMEOUT: {
                 Log.d(TAG, "onError : " + error);
                 double time = (double)(System.nanoTime() - startListeningTime) / 1000000;
                 Log.d(TAG, "Time before timeout : " + String.format("%.2f", time));
-                recoverFromError();
+                murderMalfunctioningRecognizerAndDisposeOfTheBody();
                 break;
             }
             case SpeechRecognizer.ERROR_NO_MATCH:
-                recoverFromError();
-                listenForVoiceInBackground();
+                murderMalfunctioningRecognizerAndDisposeOfTheBody();
+                //listenForVoiceInBackground();
+                break;
             default : {
                 Log.d(TAG, "onError : " + error);
                 Log.d(TAG, "Collosal motherfucking other type error occurred. Apols.");
-                recoverFromError();
+                murderMalfunctioningRecognizerAndDisposeOfTheBody();
             }
         }
 
@@ -268,59 +304,25 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
     }
 
     @Override
-    public void onResults(Bundle results) {
+    public void onResults(Bundle recognizerOutput) {
         Log.d(TAG, "onResults() invoked");
-
-        processResults(results);
-
-        for (Word word : resultsUnderEvaluation.getCurrentResultsWordList()) {
-            if (word.getType() != WordType.KEYWORD) {
-                cumulativeResults.append(word.getWordString() + " ");
-            }
-        }
-
-        document.commitResults(resultsUnderEvaluation, storage);
+        onListeningStopped();
+        processResults(recognizerOutput);
+        document.commitResults(results, storage);
 
         // Start listening again immediately.
-        listenForVoiceInBackground();
+        //listenForVoiceInBackground();
     }
 
     @Override
-    public void onPartialResults(Bundle partialResults) {
+    public void onPartialResults(Bundle recognizerOutput) {
         Log.d(TAG, "onPartialResults() invoked");
-        processResults(partialResults);
+        processResults(recognizerOutput);
     }
 
-    private void processResults(Bundle results) {
-        updateIsSpeakingIndicator(speaker.isSpeaking());
-        List<String> res = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-        InterpreterReturnPacket packet = currentInterpreter.interpret(
-                document,
-                resultsUnderEvaluation,
-                res.get(0),
-                masterState,
-                speaker.isSpeaking());
-        if (packet.resultsUnderEvaluationChanged) {
-            Log.d(TAG, res.get(0));
-
-            // Check last 2 words for match with the master keywords:
-            String lastTwoWords = resultsUnderEvaluation.getLastTwoWordsAsString();
-            if (AbstractInterpreter.shouldSwitchToEditMode(lastTwoWords)) {
-                switchToEditing();
-            }
-
-            String keywordCandidate = resultsUnderEvaluation.getLastWord().getWordString();
-            updateDictationOutputTextView(resultsUnderEvaluation);
-            InterpreterSelector appropriateIntSel = interpreterSelector.queryAppropriateInterpreterSelector(
-                    keywordCandidate,
-                    currentInterpreter);
-            if (appropriateIntSel != interpreterSelector) {
-                changeInterpreter(appropriateIntSel);
-            }
-        }
-        if (packet.finishedInterpreting) {
-            changeInterpreter(InterpreterSelector.STANDARD_INTERPRETER);
-        }
+    private void processResults(Bundle recognizerOutput) {
+        List<String> res = recognizerOutput.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+        currentInterpreter.interpret(res.get(0), results);
     }
 
     @Override
@@ -328,7 +330,7 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
 
     }
 
-    private void recoverFromError() {
+    private void murderMalfunctioningRecognizerAndDisposeOfTheBody() {
         recognizer.cancel();
         recognizer.destroy();
         recognizer = null;
@@ -350,4 +352,118 @@ public class MainActivity extends AppCompatActivity implements RecognitionListen
         currentInterpreter = newSelector.getInterpreter();
         Log.d(TAG, "Interpreter has changed : " + currentInterpreter.getClass());
     }
+
+    public MasterState getMasterState() {
+        return masterState;
+    }
+
+    @Override
+    public void onSpeechStarted() {
+        isSpeaking = true;
+        updateIsSpeakingIndicator(isSpeaking);
+
+        isListening = false;
+        updateIsListeningIndicatorTV(isListening);
+        indicatorHum.pause();
+
+        /*recognizer.stopListening();*/ // Not working as per API, so.....
+        document.commitResults(results, storage);
+        murderMalfunctioningRecognizerAndDisposeOfTheBody();
+    }
+
+    @Override
+    public void onSpeechEnded() {
+        isSpeaking = false;
+        updateIsSpeakingIndicator(isSpeaking);
+        soundMeter.start();
+        /*listenForVoiceInBackground();*/
+    }
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // Inflate the menu; this adds items to the action bar if it is present.
+        getMenuInflater().inflate(R.menu.menu_main, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // Handle action bar item clicks here. The action bar will
+        // automatically handle clicks on the Home/Up button, so long
+        // as you specify a parent activity in AndroidManifest.xml.
+        int id = item.getItemId();
+
+        //noinspection SimplifiableIfStatement
+        if (id == R.id.action_settings) {
+            return true;
+        }
+
+        return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public Document getDocument() {
+        return document;
+    }
+
+    @Override
+    public void onFinishedInterpreting() {
+        interpreterSelector = InterpreterSelector.STANDARD_INTERPRETER;
+        currentInterpreter = interpreterSelector.getInterpreter();
+        switchToDictating();
+        updateInterpreterSelectorTV();
+    }
+
+    @Override
+    public void onNewWordFound() {
+        Log.d(TAG, results.getPreviousRecognizerOutput());
+
+        // Check last 2 words for match with the master keywords:
+        String lastTwoWords = this.results.getLastTwoWordsAsString();
+        if (AbstractInterpreter.shouldSwitchToEditMode(lastTwoWords)) {
+            switchToEditing();
+            results.ignoreLastNumberOfWords(2);
+        }
+
+        String keywordCandidate = this.results.getLastWord().getWordString();
+        updateDictationOutputTextView(this.results);
+        InterpreterSelector appropriateIntSel = interpreterSelector.queryAppropriateInterpreterSelector(
+                keywordCandidate,
+                currentInterpreter);
+        if (appropriateIntSel != interpreterSelector) {
+            changeInterpreter(appropriateIntSel);
+        }
+    }
+
+    @Override
+    public SpeakerFacade getSpeaker() {
+        return speaker;
+    }
+
+    private Runnable pollSoundLevelTask = new Runnable() {
+        @Override
+        public void run() {
+            if (isListening == false && isSpeaking == false && soundMeter.isOverThreshold()) {
+                Log.d(TAG, "listener fired by sound!");
+                listenForVoiceInBackground();
+            }
+
+            soundLevelHandler.postDelayed(pollSoundLevelTask, SOUND_METER_SAMPLING_DELAY);
+        }
+    };
+
+    private void onListeningStarted() {
+        isListening = true;
+        updateIsListeningIndicatorTV(isListening);
+        soundMeter.stop();
+        indicatorHum.play();
+        Log.d(TAG, "onListeningStarted() invoked");
+    }
+
+    private void onListeningStopped() {
+        isListening = false;
+        updateIsListeningIndicatorTV(isListening);
+        soundMeter.start();
+        indicatorHum.pause();
+    }
+
 }

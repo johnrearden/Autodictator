@@ -4,22 +4,18 @@ package com.intricatech.autodictator;
  * Created by Bolgbolg on 11/02/2018.
  */
 
-public abstract class AbstractInterpreter implements InterpreterState {
+public abstract class AbstractInterpreter implements Interpretable {
 
-    static final String SWITCH_TO_EDIT_KEYWORD = "Ok so";
+    static final String SWITCH_TO_EDIT_KEYWORD = "OK SO";
 
     @Override
-    public abstract InterpreterReturnPacket interpret(Document document,
-                                      ResultsUnderEvaluation resultsUnderEvaluation,
-                                      String resultsFromRecognizer,
-                                      MainActivity.MasterState masterState,
-                                      boolean isSpeaking);
+    public abstract void interpret(String resultsFromRecognizer, Results results);
 
     public static boolean shouldSwitchToEditMode(String candidate) {
-        if (candidate.equals(SWITCH_TO_EDIT_KEYWORD)
-                || candidate.equals(SWITCH_TO_EDIT_KEYWORD.toLowerCase())
-                || candidate.equals(SWITCH_TO_EDIT_KEYWORD.toUpperCase())) {
+        if (candidate.toUpperCase().equals(SWITCH_TO_EDIT_KEYWORD)) {
             return true;
-        } else return false;
+        } else {
+            return false;
+        }
     }
 }
