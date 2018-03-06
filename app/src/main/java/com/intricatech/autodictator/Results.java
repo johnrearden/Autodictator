@@ -11,10 +11,10 @@ import java.util.List;
 
 public class Results {
 
-    private static String TAG;
+    protected static String TAG;
 
-    private String previousRecognizerOutput;
-    private List<Word> wordList;
+    protected  String previousRecognizerOutput;
+    protected  List<Word> wordList;
 
     public Results() {
         TAG = getClass().getSimpleName();
@@ -42,7 +42,7 @@ public class Results {
         return previousRecognizerOutput;
     }
 
-    public void overwriteCurrentResults(String cumulativeCurrentResults) {
+    protected void overwriteCurrentResults(String cumulativeCurrentResults) {
         this.previousRecognizerOutput = cumulativeCurrentResults;
     }
 
@@ -64,7 +64,7 @@ public class Results {
 
     }
 
-    public String getLastTwoWordsAsString() {
+    /*public String getLastTwoWordsAsString() {
         int size = wordList.size();
         if (size < 2) {
             return "";
@@ -75,6 +75,22 @@ public class Results {
             sb.append(wordList.get(size - 1).getWordString());
             return sb.toString();
         }
+    }*/
+
+    public String getLastNWordsAsString(int n) {
+        int size = wordList.size();
+        if (size < n) {
+            return "";
+        } else {
+            StringBuilder sb = new StringBuilder();
+            for (int i = size - n; i < size - 1; i++) {
+                sb.append(wordList.get(i).getWordString());
+                sb.append(" ");
+            }
+            sb.setLength(sb.length() - 1); // Remove final trailing space.
+            return sb.toString();
+
+        }
     }
 
     public void ignoreLastNumberOfWords(int numberOfWordsToIgnore) {
@@ -83,6 +99,37 @@ public class Results {
             wordList.get(i).declareKeyword(true);
             Log.d(TAG, toString());
         }
+    }
+
+    /**
+     * Method performs a simple length comparison of the latest string from the recognizer
+     * and the accumulated results (in String form) received so far, and informs the caller if the
+     * current recognizer String contains any new words.
+     * @param resultsFromRecognizer A partial/full results String from the recognizer.
+     * @return TRUE if the String contains a new word, FALSE otherwise.
+     */
+    public boolean isNewResult(String resultsFromRecognizer) {
+        String cumulativeResults = getPreviousRecognizerOutput();
+
+        // If the length of the partial/complete results returned from the recognizer differs from
+        // the length of Results.cumulativeCurrentResults, the recognizer has provided
+        // new results, and we must update our cumulative results.
+        if ( !resultsFromRecognizer.equals(cumulativeResults)) {
+            return true;
+        } else return false;    }
+
+    /**
+     * Utility method that discards everything up to and including the keyword that switches
+     * Interpreter from a recognizerResults String.
+     * @param source The String to be pruned.
+     * @param keyword The selector keyword that preceeds the required String.
+     * @return The pruned String.
+     */
+    public static String splitStringOnKeyword(String source, String keyword) {
+        String upperCaseVersion = source.toUpperCase();
+        String[] splitBySelector = upperCaseVersion.split(keyword);
+        int index = splitBySelector.length - 1; // We need the last String in the array.
+        return splitBySelector[index];
     }
 
     @Override

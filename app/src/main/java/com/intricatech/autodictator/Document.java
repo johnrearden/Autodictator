@@ -220,6 +220,10 @@ public class Document {
         sentence.setStorageID(storageId);
     }
 
+    public Paragraph getCurrentParagraph() {
+        return paragraphList.get(paragraphList.size() - 1);
+    }
+
     public String toString() {
         StringBuilder sb = new StringBuilder("ID : " + documentID + "\n");
         for (Paragraph p : paragraphList) {

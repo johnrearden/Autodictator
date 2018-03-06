@@ -29,12 +29,10 @@ public class StandardInterpreter extends AbstractInterpreter {
     @Override
     public void interpret(String resultsFromRecognizer, Results results) {
 
-        String cumulativeResults = results.getPreviousRecognizerOutput();
-
         // If the length of the partial/complete results returned from the recognizer differs from
         // the length of Results.cumulativeCurrentResults, the recognizer has provided
         // new results, and we must update our cumulative results.
-        if ( !resultsFromRecognizer.equals(cumulativeResults)) {
+        if (results.isNewResult(resultsFromRecognizer)) {
             results.updateCurrentResultsWordList(
                     resultsFromRecognizer,
                     client.getMasterState());

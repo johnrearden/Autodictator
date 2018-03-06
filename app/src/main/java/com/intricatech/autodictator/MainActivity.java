@@ -418,7 +418,7 @@ public class MainActivity extends AppCompatActivity
         Log.d(TAG, results.getPreviousRecognizerOutput());
 
         // Check last 2 words for match with the master keywords:
-        String lastTwoWords = this.results.getLastTwoWordsAsString();
+        String lastTwoWords = this.results.getLastNWordsAsString(2);
         if (AbstractInterpreter.shouldSwitchToEditMode(lastTwoWords)) {
             switchToEditing();
             results.ignoreLastNumberOfWords(2);

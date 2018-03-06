@@ -17,7 +17,7 @@ public class Paragraph {
         this.index = index;
     }
 
-    public List<Sentence> getSentenceList() {
+    public Iterable<Sentence> getSentenceList() {
         return sentenceList;
     }
 
@@ -27,6 +27,10 @@ public class Paragraph {
 
     public int getIndex() {
         return index;
+    }
+
+    public Sentence getCurrentSentence() {
+        return sentenceList.get(sentenceList.size() - 1);
     }
 
     public String toString() {

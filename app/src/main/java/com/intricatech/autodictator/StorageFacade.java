@@ -56,7 +56,7 @@ public class StorageFacade implements Storable {
             return storageId;
         } else {
             ContentValues values = new ContentValues();
-            values.put(SentenceTable.WORD_STRING, sentence.getWordListAsString());
+            values.put(SentenceTable.WORD_STRING, sentence.getSentenceAsString());
             values.put(SentenceTable.PARAGRAPH_INDEX, sentence.getParagraphIndex());
             values.put(SentenceTable.POSITION_IN_PARAGRAPH, sentence.getIndexOfAppearance());
 

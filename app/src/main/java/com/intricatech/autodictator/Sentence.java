@@ -28,7 +28,7 @@ public class Sentence {
         wordList.add(word);
     }
 
-    public String getWordListAsString() {
+    public String getSentenceAsString() {
         StringBuilder sb = new StringBuilder();
         int size = wordList.size();
         for (Word word : wordList) {
@@ -59,6 +59,6 @@ public class Sentence {
     }
 
     public String toString() {
-        return "index : " + indexOfAppearance + ", para : " + paragraphIndex + " : " + getWordListAsString();
+        return "index : " + indexOfAppearance + ", para : " + paragraphIndex + " : " + getSentenceAsString();
     }
 }
